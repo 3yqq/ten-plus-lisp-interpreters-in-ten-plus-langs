@@ -6,10 +6,18 @@
 
 using namespace std;
 
+class LispObject;
+class L_Env {
+    public:
+    unordered_map<string_view, unique_ptr<LispObject>> objMap;
+    L_Env(): objMap() {}
+};
+
 class LispObject {
 public:
     virtual ~LispObject() {}
     virtual void print() const = 0; // 为所有对象提供一个输出接口
+    virtual unique_ptr<LispObject> clone() const = 0;
 };
 
 class LispString : public LispObject {
@@ -20,6 +28,10 @@ public:
     void print() const override {
         cout << "\"" << str << "\"";
     }
+
+    unique_ptr<LispObject> clone() const {
+        return make_unique<LispString>(str);
+    }
 };
 
 class LispNumber : public LispObject {
@@ -29,6 +41,10 @@ public:
 
     void print() const override {
         cout << value;
+    }
+
+    unique_ptr<LispObject> clone() const {
+        return make_unique<LispNumber>(value);
     }
 };
 
@@ -55,34 +71,60 @@ void tokenize(string_view input, list<string_view>& tokens) {
 }
 
 // 执行表达式
-unique_ptr<LispObject> exeExpr(list<string_view>& tokens) {
+unique_ptr<LispObject> exeExpr(L_Env* env, list<string_view>& tokens) {
     if (tokens.empty()) return nullptr;
 
-    tokens.pop_front(); // remove '('
+    auto token = tokens.front();
+    tokens.pop_front(); // Remove the first token
 
-    string_view token = tokens.front();
-    tokens.pop_front();
+    if (token == "(") {
+        // Handle more complex expressions, possibly recursive
+        token = tokens.front();
+        tokens.pop_front();
+    }
 
+    // Check if the token is a number
+    if (isdigit(token.front())) {
+        double value = std::stod(string(token)); // Convert string to number
+        return make_unique<LispNumber>(value);
+    }
+
+    // Check if the token starts with a letter (variable name)
+    if (isalpha(token.front()) || token.front() == '_') {
+        // Check if the variable exists in the environment
+        auto it = env->objMap.find(token);
+        if (it != env->objMap.end()) {
+            return it->second->clone(); // Return a clone of the variable's value
+        } else {
+            // If the variable is not found, handle it (e.g., return null or an error)
+            return nullptr;
+        }
+    }
+
+    // Handle other types of expressions (e.g., "define")
     if (token == "define") {
         // Handle define expression
         string_view var_name = tokens.front();
         tokens.pop_front();
 
-        // 假设定义一个数字变量
-        double value = std::stod(string(tokens.front())); // 将字符串转换为数字
+        // Assuming we define a number
+        double value = std::stod(string(tokens.front())); // Convert string to number
         tokens.pop_front();
 
-        // 返回一个 LispNumber 对象
-        return make_unique<LispObject>(value);
+        // Store it into the environment
+        env->objMap.emplace(var_name, make_unique<LispNumber>(value));
+
+        return make_unique<LispNumber>(value);
     }
 
-    // 在这里可以根据具体需求进一步扩展解析其他表达式
+    // Further expressions can be handled here
 
-    return nullptr;
+    return nullptr; // Return null if no known expression type is matched
 }
 
+
 // 执行输入的 tokens
-unique_ptr<LispObject>  exe(list<string_view>& tokens) {
+unique_ptr<LispObject>  exe( L_Env* env ,list<string_view>& tokens) {
     if (tokens.empty()) return nullptr;
 
     if (tokens.front() == "exit") {
@@ -90,8 +132,7 @@ unique_ptr<LispObject>  exe(list<string_view>& tokens) {
     }
 
     if (tokens.front() == "(") {
-
-        return exeExpr(tokens); // 解析括号中的表达式
+        return exeExpr(env,tokens); // 解析括号中的表达式
     }
 
     return nullptr;
@@ -99,10 +140,11 @@ unique_ptr<LispObject>  exe(list<string_view>& tokens) {
 
 // 运行输入并执行解析和计算
 void run(string_view input) {
+    L_Env env;
     std::list<std::string_view> tokens;
     tokenize(input, tokens); // 分词
 
-    unique_ptr<LispObject> result = exe(tokens); // 执行表达式
+    unique_ptr<LispObject> result = exe(&env, tokens); // 执行表达式
 
     if (result) {
         result->print(); // 打印结果
