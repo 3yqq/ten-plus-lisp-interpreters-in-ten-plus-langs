@@ -16,8 +16,10 @@ class L_Env {
 class LispObject {
 public:
     virtual ~LispObject() {}
-    virtual void print() const = 0; // 为所有对象提供一个输出接口
-    virtual unique_ptr<LispObject> clone() const = 0;
+    virtual void print() const {}  // Mark as virtual
+    virtual unique_ptr<LispObject> clone() const {
+        return make_unique<LispObject>();
+    }
 };
 
 class LispString : public LispObject {
@@ -25,11 +27,11 @@ public:
     string_view str;
     LispString(string_view str) : str(str) {}
 
-    void print() const override {
+    void print() const override {  // Override print in derived class
         cout << "\"" << str << "\"";
     }
 
-    unique_ptr<LispObject> clone() const {
+    unique_ptr<LispObject> clone() const override {
         return make_unique<LispString>(str);
     }
 };
@@ -39,14 +41,15 @@ public:
     double value;
     LispNumber(double value) : value(value) {}
 
-    void print() const override {
+    void print() const override {  // Override print in derived class
         cout << value;
     }
 
-    unique_ptr<LispObject> clone() const {
+    unique_ptr<LispObject> clone() const override {
         return make_unique<LispNumber>(value);
     }
 };
+
 
 // 分词函数
 void tokenize(string_view input, list<string_view>& tokens) {
@@ -77,20 +80,10 @@ unique_ptr<LispObject> exeExpr(L_Env* env, list<string_view>& tokens) {
     auto token = tokens.front();
     tokens.pop_front(); // Remove the first token
 
-    if (token == "(") {
-        // Handle more complex expressions, possibly recursive
-        token = tokens.front();
-        tokens.pop_front();
-    }
-
-    // Check if the token is a number
     if (isdigit(token.front())) {
         double value = std::stod(string(token)); // Convert string to number
         return make_unique<LispNumber>(value);
-    }
-
-    // Check if the token starts with a letter (variable name)
-    if (isalpha(token.front()) || token.front() == '_') {
+    } else if (isalpha(token.front()) || token.front() == '_') {
         // Check if the variable exists in the environment
         auto it = env->objMap.find(token);
         if (it != env->objMap.end()) {
@@ -99,6 +92,12 @@ unique_ptr<LispObject> exeExpr(L_Env* env, list<string_view>& tokens) {
             // If the variable is not found, handle it (e.g., return null or an error)
             return nullptr;
         }
+    }
+
+    if (token == "(") {
+        // Handle more complex expressions, possibly recursive
+        token = tokens.front();
+        tokens.pop_front();
     }
 
     // Handle other types of expressions (e.g., "define")
@@ -113,7 +112,7 @@ unique_ptr<LispObject> exeExpr(L_Env* env, list<string_view>& tokens) {
 
         // Store it into the environment
         env->objMap.emplace(var_name, make_unique<LispNumber>(value));
-
+        tokens.pop_front(); // skip ")"
         return make_unique<LispNumber>(value);
     }
 
