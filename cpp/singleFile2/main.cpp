@@ -55,8 +55,10 @@ void tokenize(string_view input, list<string_view>& tokens) {
 }
 
 // 执行表达式
-LispObject* exeExpr(list<string_view>& tokens) {
+unique_ptr<LispObject> exeExpr(list<string_view>& tokens) {
     if (tokens.empty()) return nullptr;
+
+    tokens.pop_front(); // remove '('
 
     string_view token = tokens.front();
     tokens.pop_front();
@@ -71,7 +73,7 @@ LispObject* exeExpr(list<string_view>& tokens) {
         tokens.pop_front();
 
         // 返回一个 LispNumber 对象
-        return new LispNumber(value);
+        return make_unique<LispObject>(value);
     }
 
     // 在这里可以根据具体需求进一步扩展解析其他表达式
@@ -80,7 +82,7 @@ LispObject* exeExpr(list<string_view>& tokens) {
 }
 
 // 执行输入的 tokens
-LispObject* exe(list<string_view>& tokens) {
+unique_ptr<LispObject>  exe(list<string_view>& tokens) {
     if (tokens.empty()) return nullptr;
 
     if (tokens.front() == "exit") {
@@ -88,7 +90,7 @@ LispObject* exe(list<string_view>& tokens) {
     }
 
     if (tokens.front() == "(") {
-        tokens.pop_front();
+
         return exeExpr(tokens); // 解析括号中的表达式
     }
 
@@ -100,12 +102,11 @@ void run(string_view input) {
     std::list<std::string_view> tokens;
     tokenize(input, tokens); // 分词
 
-    LispObject* result = exe(tokens); // 执行表达式
+    unique_ptr<LispObject> result = exe(tokens); // 执行表达式
 
     if (result) {
         result->print(); // 打印结果
         cout << endl;
-        delete result; // 释放内存
     } else {
         cout << "No result or exit" << endl;
     }
